@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import httpx
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -48,7 +48,9 @@ async def auth_callback(code: str, request: Request, response: Response):
 
         token = security.create_access_token(uid=user_name)
         response.set_cookie(
-            key=authx_config.JWT_ACCESS_COOKIE_NAME, value=token, httponly=True
+            key=authx_config.JWT_ACCESS_COOKIE_NAME,
+            value=token,
+            httponly=True,
         )
         return {"status": "ok", "name": user_name}
 
@@ -57,3 +59,9 @@ async def auth_callback(code: str, request: Request, response: Response):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@router.get("/logout", dependencies=[Depends(security.access_token_required)])
+async def logout(response: Response):
+    response.delete_cookie(key=authx_config.JWT_ACCESS_COOKIE_NAME, httponly=True)
+    return {"status": "ok", "detail": "You are logged out!"}

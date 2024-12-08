@@ -6,12 +6,12 @@ from google.auth.transport import requests
 from google.oauth2 import id_token
 
 from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-from helpers.auth_helper import security, authx_config
+from helpers.auth_helper import security
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.get("/login")
+@router.post("/login")
 async def login(request: Request):
     redirect_uri = request.url_for("auth_callback")
     google_auth_url = f"https://accounts.google.com/o/oauth2/auth?client_id={GOOGLE_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope=openid email profile"
@@ -46,22 +46,21 @@ async def auth_callback(code: str, request: Request, response: Response):
 
         user_name = id_info.get("name")
 
-        token = security.create_access_token(uid=user_name)
-        response.set_cookie(
-            key=authx_config.JWT_ACCESS_COOKIE_NAME,
-            value=token,
-            httponly=True,
-        )
+        access_token = security.create_access_token(uid=user_name)
+        refresh_token = security.create_refresh_token(uid=user_name)
+
+        security.set_access_cookies(token=access_token, response=response)
+        security.set_refresh_cookies(token=refresh_token, response=response)
         return {"status": "ok", "name": user_name}
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid id_token: {str(e)}")
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-@router.get("/logout", dependencies=[Depends(security.access_token_required)])
+@router.post("/logout", dependencies=[Depends(security.access_token_required)])
 async def logout(response: Response):
-    response.delete_cookie(key=authx_config.JWT_ACCESS_COOKIE_NAME, httponly=True)
+    security.unset_cookies(response=response)
     return {"status": "ok", "detail": "You are logged out!"}
